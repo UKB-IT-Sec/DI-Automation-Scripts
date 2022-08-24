@@ -3,6 +3,7 @@
 .settings/
 .DS_Store
 src/diasenv/
+src/dias.log
 
 non_persistent_vdi_cleanup.py
 
