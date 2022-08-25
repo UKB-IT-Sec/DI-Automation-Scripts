@@ -1,5 +1,6 @@
 # Deep Instinct v3.0 REST API Wrapper
 # Patrick Van Zandt, Principal Professional Services Engineer, Deep Instinct
+# Modified by Peter Weidenbach University Hospital Bonn
 #
 # Compatibility:
 # -Deep Instinct D-Appliance versions 3.0.x, 3.1.x, 3.2.x, 3.3.x, and 3.4.x
@@ -29,7 +30,7 @@ debug_mode = False
 quiet_mode = False
 
 # Import various libraries used by one or more method below.
-import requests, json, datetime, pandas, re, ipaddress, time, os, hashlib
+import requests, json, datetime, pandas, re, ipaddress, time, os, hashlib, logging
 #If any of the above throw import errors, try running 'pip install library_name'
 #If that doesn't fix the problem I recommend to search Google for the error
 #that you are getting.
@@ -49,7 +50,7 @@ def export_devices(include_deactivated=False):
     #write data to disk
     devices_df.to_excel(f'{folder_name}/{file_name}', index=False)
     #return confirmation message
-    print (f'INFO: {str(len(devices))} devices exported to {folder_name}/{file_name}')
+    logging.info(msg)(f'INFO: {str(len(devices))} devices exported to {folder_name}/{file_name}')
 
 
 # Accepts a list of (exact hostnames | hostname regex patterns | CIDRs) and
@@ -166,7 +167,7 @@ def export_policies(include_allow_deny_lists=True):
         chrome_policies_df.to_excel(writer, sheet_name='Chrome OS', index=False)
         linux_policies_df.to_excel(writer, sheet_name='Linux', index=False)
         network_agentless_policies_df.to_excel(writer, sheet_name='Agentless', index=False)
-    print(f'INFO: {str(len(policies))} policies exported to {folder_name}/{file_name}')
+    logging.info(f'INFO: {str(len(policies))} policies exported to {folder_name}/{file_name}')
 
 # Enable automatic upgrade setting in policies
 def enable_upgrades(platforms=['WINDOWS','MAC'], automatic_upgrade=True, return_modified_policies_id_list=False):
@@ -286,19 +287,17 @@ def get_devices(include_deactivated=True):
             else: #added this to handle issue where some server versions fail to return last_id on final batch of devices
                 last_id = None
             if not quiet_mode:
-                print(request_url, 'returned 200 with last_id', last_id, end='\r')
+                logging.info(request_url, 'returned 200 with last_id', last_id, end='\r')
             if 'devices' in response:
                 devices = response['devices'] #extract devices from response
                 for device in devices: #iterate through the list of devices
                     if device['license_status'] == 'ACTIVATED' or include_deactivated:
                         collected_devices.append(device) #add to collected devices
         else:
-            print('WARNING: Unexpected return code', response.status_code,
+            logging.warning('WARNING: Unexpected return code', response.status_code,
             'on request to\n', request_url, '\nwith headers\n', headers)
             error_count += 1  #increment error counter
             time.sleep(10) #wait before trying request again
-    if not quiet_mode:
-        print('\n')
 
     # When while loop exists, we know we have collected all visible data
 
@@ -412,8 +411,7 @@ def get_policies(include_policy_data=False, include_allow_deny_lists=False, keep
             policy_id = policy['id']
             request_url = f'https://{fqdn}/api/v1/policies/{policy_id}/data'
             response = requests.get(request_url, headers=headers)
-            if not quiet_mode:
-                print(request_url, 'returned', response.status_code, end='\r')
+            logging.info(request_url, 'returned', response.status_code, end='\r')
             # Check response code (for some platforms, no policy data available)
             if response.status_code == 200:
                 # Extract policy data from response and append it to policy
@@ -422,8 +420,6 @@ def get_policies(include_policy_data=False, include_allow_deny_lists=False, keep
                 else:
                     policy_data = response.json()['data']
                 policy.update(policy_data)
-        if not quiet_mode:
-            print('\n')
 
     # APPEND ALLOW-LIST, DENY-LIST, AND EXCLUSION DATA (IF ENABLED)
     if include_allow_deny_lists:
@@ -453,12 +449,10 @@ def get_policies(include_policy_data=False, include_allow_deny_lists=False, keep
 
                 request_url = f'https://{fqdn}/api/v1/policies/{policy_id}/{list_type}'
                 response = requests.get(request_url, headers=headers)
-                print(request_url, 'returned', response.status_code, end='\r')
+                logging.info(request_url, 'returned', response.status_code, end='\r')
                 if response.status_code == 200:
                     response = response.json()
                     policy['allow_deny_and_exclusion_lists'][list_type] = response
-        if not quiet_mode:
-            print('\n')
 
     # RETURN THE COLLECTED DATA
     return policies
@@ -551,10 +545,10 @@ def remove_device(device, device_id_only=False):
 
     #RETURN TRUE/FALSE BASED ON WHETHER WE GOT THE EXPECTED RETURN CODE
     if response.status_code == 204:
-        print('INFO: Successfully removed device', device)
+        logging.info('Successfully removed device', device)
         return True
     else:
-        print('INFO: Failed to remove device', device)
+        logging.warning('Failed to remove device', device)
         return False
 
 
@@ -588,8 +582,7 @@ def get_events(search={}, minimum_event_id=0, suspicious=False):
                 minimum_event_id = response.json()['last_id']
 
                 #print result to console
-                if not quiet_mode:
-                    print(request_url, 'returned', response.status_code, 'with last_id', minimum_event_id, end='\r')
+                logging.info(request_url, 'returned', response.status_code, 'with last_id', minimum_event_id, end='\r')
 
                 #if we got a none-null last_id back
                 if minimum_event_id != None:
@@ -599,7 +592,7 @@ def get_events(search={}, minimum_event_id=0, suspicious=False):
                     for event in events:
                         collected_events.append(event)
         except requests.exceptions.RequestException:
-            print('WARNING: Exception on', request_url, '. Will sleep for 10 seconds and try again.')
+            logging.warning('Exception on', request_url, '. Will sleep for 10 seconds and try again.')
             time.sleep(10)
 
         if response.status_code == 200:
@@ -607,8 +600,7 @@ def get_events(search={}, minimum_event_id=0, suspicious=False):
             minimum_event_id = response.json()['last_id']
 
             #print result to console
-            if not quiet_mode:
-                print(request_url, 'returned', response.status_code, 'with last_id', minimum_event_id, end='\r')
+            logging.info(request_url, 'returned', response.status_code, 'with last_id', minimum_event_id, end='\r')
 
             #if we got a none-null last_id back
             if minimum_event_id != None:
@@ -617,8 +609,6 @@ def get_events(search={}, minimum_event_id=0, suspicious=False):
                 #append the event(s) from this response to collected_events
                 for event in events:
                     collected_events.append(event)
-    if not quiet_mode:
-        print('\n')
 
     #return the list of collected events
     return collected_events
@@ -735,10 +725,10 @@ def get_event(event_id, suspicious=False):
     if response.status_code == 200:
         return response.json()['event']
     elif response.status_code == 404:
-        print('ERROR: Event', str(event_id), 'not found')
+        logging.error('Event', str(event_id), 'not found')
         return []
     else:
-        print('ERROR: Unexpected return code', str(response.status_code), 'on request to', request_url)
+        logging.error('Unexpected return code', str(response.status_code), 'on request to', request_url)
         return []
 
 def create_policy(name, base_policy_id, comment='', quiet_mode=False):
@@ -759,10 +749,10 @@ def create_policy(name, base_policy_id, comment='', quiet_mode=False):
     if response.status_code == 200:
         response = response.json()
         if not quiet_mode:
-            print('INFO: Policy', response['id'], response['name'], 'created')
+            logging.info('Policy', response['id'], response['name'], 'created')
         return response
     else:
-        print('ERROR: Unexpected return code', response.status_code,
+        logging.error('Unexpected return code', response.status_code,
         'on POST to', request_url, 'with payload\n', payload)
         return None
 
@@ -779,16 +769,16 @@ def delete_policy(policy_id):
 
     # Check response code
     if response.status_code == 204:
-        print('INFO: Policy', policy_id, 'was deleted')
+        logging.info('Policy', policy_id, 'was deleted')
         return True
     elif response.status_code == 404:
-        print('ERROR: Policy', policy_id, 'not found')
+        logging.error('Policy', policy_id, 'not found')
         return False
     elif response.status_code == 422:
-        print('ERROR: Policy', policy_id, 'is a default policy. Default policies cannot be deleted.')
+        logging.error('Policy', policy_id, 'is a default policy. Default policies cannot be deleted.')
         return False
     else:
-        print('ERROR: Unexpected return code', response.status_code,
+        logging.error('Unexpected return code', response.status_code,
         'on DELETE to', request_url)
         return False
 
@@ -817,9 +807,9 @@ def export_events(minimum_event_id=0, suspicious=False, flatten_device_info=True
 
         #now that we have what we know is a valid list of coulmns, proceed
         events_df.to_excel(f'{folder_name}/{file_name}', index=False, sheet_name='Event_Data', columns=columns)
-        print (f'INFO: {str(len(events))} events exported to {folder_name}/{file_name}')
+        logging.info(f'{str(len(events))} events exported to {folder_name}/{file_name}')
     else:
-        print('WARNING: No events were found on the server')
+        logging.warning('No events were found on the server')
 
 def export_groups(exclude_default_groups=False):
     groups = get_groups(exclude_default_groups=exclude_default_groups)
@@ -827,7 +817,7 @@ def export_groups(exclude_default_groups=False):
     folder_name = create_export_folder()
     file_name = f'groups_{datetime.datetime.today().strftime("%Y-%m-%d_%H.%M")}_{fqdn.split(".",1)[0]}.xlsx'
     groups_df.to_excel(f'{folder_name}/{file_name}', index=False)
-    print (f'INFO: {str(len(groups))} groups exported to {folder_name}/{file_name}')
+    logging.info(f'{str(len(groups))} groups exported to {folder_name}/{file_name}')
 
 
 def create_tenant(tenant_name, license_limit, msp_name):
@@ -895,16 +885,16 @@ def delete_tenant(tenant_name, msp_name):
 
     # Check return code and return Success or descriptive error
     if response.status_code == 204:
-        print('INFO: Tenant', tenant_name, 'was deleted from MSP', msp_name)
+        logging.info('Tenant', tenant_name, 'was deleted from MSP', msp_name)
         return True
     elif response.status_code == 403:
-        print('ERROR: Only Hub-Admin or MSP-Admin can delete tenants')
+        logging.error('Only Hub-Admin or MSP-Admin can delete tenants')
         return False
     elif response.status_code == 404:
-        print('ERROR: Tenant not found')
+        logging.error('Tenant not found')
         return False
     elif response.status_code == 409:
-        print('ERROR: Tried to delete a tenant but active devices still exist!')
+        logging.error('Tried to delete a tenant but active devices still exist!')
         return False
 
 def request_agent_logs(device_id, device_id_only=True):
@@ -921,16 +911,16 @@ def request_agent_logs(device_id, device_id_only=True):
 
     # Check return code and return Success or descriptive error
     if response.status_code == 204:
-        print('INFO: Device', device_id, 'set to upload logs')
+        logging.info('Device', device_id, 'set to upload logs')
         return True
     elif response.status_code == 403:
-        print('WARN: Device', device_id, 'does not belong to connector’s msp')
+        logging.warning('Device', device_id, 'does not belong to connector’s msp')
         return False
     elif response.status_code == 404:
-        print('WARN: Device', device_id, 'not found')
+        logging.warning('Device', device_id, 'not found')
         return False
     else:
-        print('ERROR: Unexpected return code', response.status_code, 'on POST to', request_url, 'with headers', headers)
+        logging.error('Unexpected return code', response.status_code, 'on POST to', request_url, 'with headers', headers)
         return False
 
 def close_events(event_id_list, open=False, suspicious=False):
@@ -959,12 +949,12 @@ def close_events(event_id_list, open=False, suspicious=False):
     # Check return code and return Success or descriptive error
     if response.status_code == 204:
         if open:
-            print('INFO:', len(event_id_list), 'events were opened')
+            logging.info(len(event_id_list), 'events were opened')
         else:
-            print('INFO:', len(event_id_list), 'events were closed')
+            logging.info(len(event_id_list), 'events were closed')
         return True
     else:
-        print('ERROR: Unexpected return code', response.status_code, 'on POST to', request_url)
+        logging.error('Unexpected return code', response.status_code, 'on POST to', request_url)
         return False
 
 def close_suspicious_events(event_id_list):
@@ -1002,12 +992,12 @@ def archive_events(event_id_list, unarchive=False, suspicious=False):
     # Check return code and return Success or descriptive error
     if response.status_code == 204:
         if unarchive:
-            print('INFO: Successfully unarchived up to ', len(event_id_list), 'events')
+            logging.info('Successfully unarchived up to ', len(event_id_list), 'events')
         else:
-            print('INFO: Successfully archived up to ', len(event_id_list), 'events')
+            logging.info('Successfully archived up to ', len(event_id_list), 'events')
         return True
     else:
-        print('ERROR: Unexpected return code', response.status_code, 'on POST to', request_url)
+        logging.error('Unexpected return code', response.status_code, 'on POST to', request_url)
         return False
 
 # Disable scanning and enforcement on a device
@@ -1028,10 +1018,10 @@ def disable_device(device, device_id_only=False):
 
     #RETURN TRUE/FALSE BASED ON WHETHER WE GOT THE EXPECTED RETURN CODE
     if response.status_code == 204:
-        print('INFO: Successfully set device', device, 'to be disabled')
+        logging.info('Successfully set device', device, 'to be disabled')
         return True
     else:
-        print('INFO: Failed to disable device', device)
+        logging.warning('Failed to disable device', device)
         return False
 
 
@@ -1053,10 +1043,10 @@ def enable_device(device, device_id_only=False):
 
     #RETURN TRUE/FALSE BASED ON WHETHER WE GOT THE EXPECTED RETURN CODE
     if response.status_code == 204:
-        print('INFO: Successfully set device', device, 'to be enabled')
+        logging.info('Successfully set device', device, 'to be enabled')
         return True
     else:
-        print('INFO: Failed to enable device', device)
+        logging.warning('Failed to enable device', device)
         return False
 
 
@@ -1089,7 +1079,7 @@ def export_event_count_by_device_id(minimum_event_id=0, event_filters={}):
 
     #write data to disk
     event_counts_df.to_excel(f'{folder_name}/{file_name}', index=False, sheet_name='Event_Counts')
-    print('INFO: event counts were exported to disk as:', f'{folder_name}/{file_name}')
+    logging.info('event counts were exported to disk as:', f'{folder_name}/{file_name}')
 
     #return event_counts in case needed for further analysis in another method
     return event_counts
@@ -1132,7 +1122,7 @@ def download_uploaded_file(file_hash):
         open(f'{folder_name}/{file_name}','wb').write(response.content)
         return True
     else:
-        print('ERROR: Unexpected status code', response.status_code, 'on GET', request_url)
+        logging.error('Unexpected status code', response.status_code, 'on GET', request_url)
         return False
 
 def request_malware_sample(event_id):
@@ -1146,13 +1136,13 @@ def request_malware_sample(event_id):
 
     # Check return code and return Success or descriptive error
     if response.status_code == 204:
-        print('INFO: Upload of malware sample for event', event_id, 'successfully queued')
+        logging.info('Upload of malware sample for event', event_id, 'successfully queued')
         return True
     elif response.status_code == 404:
-        print('WARN: Event', event_id, 'not found')
+        logging.warning('Event', event_id, 'not found')
         return False
     else:
-        print('ERROR: Unexpected return code', response.status_code, 'on POST to', request_url, 'with headers', headers)
+        logging.error('Unexpected return code', response.status_code, 'on POST to', request_url, 'with headers', headers)
         return False
 
 def isolate_from_network(devices, release_from_isolation=False, input_is_hostnames=True):
@@ -1176,12 +1166,12 @@ def isolate_from_network(devices, release_from_isolation=False, input_is_hostnam
 
     if response.status_code == 200:
         if remove_from_isolation:
-            print('INFO: Removed', len(device_ids), 'devices from network isolation')
+            logging.info('Removed', len(device_ids), 'devices from network isolation')
         else:
-            print('INFO: Network isolated', len(device_ids), 'devices')
+            logging.info('Network isolated', len(device_ids), 'devices')
         return True
     else:
-        print('ERROR: Unexpected return code', response.status_code,
+        logging.error('Unexpected return code', response.status_code,
                 'on POST to', request_url, 'with payload', payload)
         return False
 
@@ -1213,9 +1203,9 @@ def add_hashes_to_deny_list(hash_list, policy_id=0, all_policies=False, platform
         request_url = f'https://{fqdn}/api/v1/policies/{policy_id}/deny-list/hashes'
         response = requests.post(request_url, headers=headers, json=payload)
         if response.status_code == 204:
-            print('INFO: Successfully added', len(payload['items']), 'hashes to the deny list for policy', policy_id)
+            logging.info('Successfully added', len(payload['items']), 'hashes to the deny list for policy', policy_id)
         else:
-            print('ERROR: Unexpected return code', response.status_code, 'on POST to', request_url)
+            logging.error('Unexpected return code', response.status_code, 'on POST to', request_url)
             error_count += 1
     if error_count > 0:
         return False
@@ -1264,7 +1254,7 @@ def migrate_policies(source_msp_id, destination_msp_id, platforms_to_migrate=['W
         payload = {'data': policy['data']}
         response = requests.put(request_url, json=payload, headers=headers)
         if response.status_code != 204:
-            print('ERROR: Unexpected response', response.status_code, 'on PUT to', request_url)
+            logging.error('Unexpected response', response.status_code, 'on PUT to', request_url)
 
         #last step is to migrate the associated allow list, deny list, and exclusion lists for the policy
         headers = {'accept': 'application/json', 'Content-Type': 'application/json', 'Authorization': key}
@@ -1283,9 +1273,9 @@ def migrate_policies(source_msp_id, destination_msp_id, platforms_to_migrate=['W
                     request_url = f'https://{fqdn}/api/v1/policies/{new_policy_id}/{list_type}'
                     response = requests.post(request_url, headers=headers, json=payload)
                     if response.status_code != 204:
-                        print('ERROR: Unexpected response', response.status_code, 'on POST to', request_url, 'with payload', payload)
+                        logging.error('Unexpected response', response.status_code, 'on POST to', request_url, 'with payload', payload)
 
-    print('INFO: Done migrating', len(policies_to_migrate), 'policies from MSP', source_msp_id , 'to MSP', destination_msp_id)
+    logging.info('Done migrating', len(policies_to_migrate), 'policies from MSP', source_msp_id , 'to MSP', destination_msp_id)
 
 def health_check(minimum_event_id=0):
     export_devices()
@@ -1307,20 +1297,20 @@ def add_process_exclusion(exclusion, policy_id, comment='', exclusion_type='proc
         payload = {'items': [ {'item': exclusion, 'comment': comment} ]}
         response = requests.post(request_url, headers=headers, json=payload)
         if response.status_code == 204:
-            print('Successfully added', exclusion_type, 'exclusion', exclusion, 'to policy', policy_id)
+            logging.info('Successfully added', exclusion_type, 'exclusion', exclusion, 'to policy', policy_id)
             return True
         else:
-            print('ERROR: Unexpected response', response.status_code, 'on POST to', request_url, 'with payload', payload)
+            logging.error('Unexpected response', response.status_code, 'on POST to', request_url, 'with payload', payload)
             return False
 
     else:
         payload = {'items': [ {'item': exclusion} ]}
         response = requests.delete(request_url, headers=headers, json=payload)
         if response.status_code == 204:
-            print('Successfully removed', exclusion_type, 'exclusion', exclusion, 'from policy', policy_id)
+            logging.info('Successfully removed', exclusion_type, 'exclusion', exclusion, 'from policy', policy_id)
             return True
         else:
-            print('ERROR: Unexpected response', response.status_code, 'on DELETE', request_url, 'with payload', payload)
+            logging.error('Unexpected response', response.status_code, 'on DELETE', request_url, 'with payload', payload)
             return False
 
 
@@ -1340,7 +1330,7 @@ def remove_all_exclusions(policy_id, exclusion_types=['folder_path', 'process_pa
         response = requests.get(request_url, headers=headers)
         exclusions = response.json()['items']
         if len(exclusions) > 0:
-            print('INFO: Removing', len(exclusions), exclusion_type, 'exclusions from policy', policy_id)
+            logging.info('Removing', len(exclusions), exclusion_type, 'exclusions from policy', policy_id)
             for exclusion in exclusions:
                 exclusion = exclusion['item']
                 add_process_exclusion(exclusion=exclusion, policy_id=policy_id, exclusion_type=exclusion_type, delete=True)
@@ -1362,12 +1352,12 @@ def add_allow_list_hashes(hash_list, policy_id, comment='', delete=False):
 
     if response.status_code == 204:
         if not delete:
-            print('Successfully added', len(hash_list), 'hashes to allow list for policy', policy_id)
+            logging.info('Successfully added', len(hash_list), 'hashes to allow list for policy', policy_id)
         else:
-            print('Successfully removed', len(hash_list), 'hashes from allow list for policy', policy_id)
+            logging.info('Successfully removed', len(hash_list), 'hashes from allow list for policy', policy_id)
         return True
     else:
-        print('ERROR: Unexpected response', response.status_code, 'on POST to', request_url, 'with payload', payload)
+        logging.error('Unexpected response', response.status_code, 'on POST to', request_url, 'with payload', payload)
         return False
 
 def remove_allow_list_hashes(hash_list, policy_id):
@@ -1417,7 +1407,7 @@ def get_device_id(hostname):
             else:
                 last_id = None
         else:
-            print('Unexpected return code', response.status_code, 'on GET', request_url, 'with headers', headers)
+            logging.error('Unexpected return code', response.status_code, 'on GET', request_url, 'with headers', headers)
             time.sleep(10)
     #no match found
     return 0
@@ -1439,7 +1429,7 @@ def export_users():
     timestamp = datetime.datetime.today().strftime('%Y-%m-%d_%H.%M')
     file_name = f'users_{timestamp}_{fqdn.split(".",1)[0]}.xlsx'
     users_df.to_excel(f'{folder_name}/{file_name}', index=False)
-    print (f'INFO: {str(len(users))} users exported to {folder_name}/{file_name}')
+    logging.info(f'{str(len(users))} users exported to {folder_name}/{file_name}')
 
 #creates a user
 def create_user(username, password, first_name='First', last_name='Last', email='user@domain.com', role='MASTER_ADMINISTRATOR'):
@@ -1450,15 +1440,15 @@ def create_user(username, password, first_name='First', last_name='Last', email=
     request_url = f'https://{fqdn}/api/v1/users/'
     response = requests.post(request_url, json=payload, headers=headers)
     if response.status_code == 200:
-        print('INFO: Successfully created user\n', json.dumps(response.json(), indent=4))
+        logging.info('Successfully created user\n', json.dumps(response.json(), indent=4))
     elif response.status_code == 409:
-        print('ERROR: Username', username, 'already exists')
+        logging.error('Username', username, 'already exists')
     elif response.status_code == 403:
-        print('ERROR: MSP related user cannot create a HUB_ADMIN user / Given tenant_id doesn’t match the controller’s tenant_ids')
+        logging.error('MSP related user cannot create a HUB_ADMIN user / Given tenant_id doesn’t match the controller’s tenant_ids')
     elif response.status_code == 400:
-        print('ERROR: MSP related user request shouldn’t contain msp_id / MSP ID should be supplied for creating MSP related user (relevant for hub level account admins) / Selected Role is not TENANT_VIEWER so tenant_id is redundant / Request can contain either msp_id or tenant_id, not both / Selected Role is not MSP related so msp_id is redundant / Selected role can not be created in a non-multitenancy environment')
+        logging.error('MSP related user request shouldn’t contain msp_id / MSP ID should be supplied for creating MSP related user (relevant for hub level account admins) / Selected Role is not TENANT_VIEWER so tenant_id is redundant / Request can contain either msp_id or tenant_id, not both / Selected Role is not MSP related so msp_id is redundant / Selected role can not be created in a non-multitenancy environment')
     else:
-        print('ERROR: Unexpected return code', response.status_code, 'on POST', request_url, 'with headers', headers)
+        logging.error('Unexpected return code', response.status_code, 'on POST', request_url, 'with headers', headers)
 
 #deletes a user
 def delete_user(user):
@@ -1466,11 +1456,11 @@ def delete_user(user):
     request_url = f'https://{fqdn}/api/v1/users/{user["id"]}'
     response = requests.delete(request_url, headers=headers)
     if response.status_code == 204:
-        print('INFO: User', user['id'], user['username'], 'deleted')
+        logging.info('User', user['id'], user['username'], 'deleted')
     elif response.status_code == 404:
-        print('ERROR: User', user['id'], 'not found')
+        logging.error('User', user['id'], 'not found')
     else:
-        print('ERROR: Unexpected return code', response.status_code, 'on DELETE', request_url, 'with headers', headers)
+        logging.error('Unexpected return code', response.status_code, 'on DELETE', request_url, 'with headers', headers)
 
 #modify role (permission level) on an existing user
 def change_user_role(username, new_role='READ_ONLY'):
@@ -1482,13 +1472,13 @@ def change_user_role(username, new_role='READ_ONLY'):
             payload = {'first_name': user['first_name'], 'last_name': user['last_name'], 'email': user['email'], 'role': new_role}
             response = requests.put(request_url, json=payload, headers=headers)
             if response.status_code == 204:
-                print('INFO: User', user['id'], user['username'], 'updated to new role', new_role)
+                logging.info('User', user['id'], user['username'], 'updated to new role', new_role)
             elif response.status_code == 404:
-                print('ERROR: User', user['id'], 'not found')
+                logging.error('User', user['id'], 'not found')
             else:
-                print('ERROR: Unexpected return code', response.status_code, 'on PUT', request_url, 'with headers', headers, 'and payload', payload)
+                logging.error('Unexpected return code', response.status_code, 'on PUT', request_url, 'with headers', headers, 'and payload', payload)
             return None
-    print('ERROR: No user found with provided username', username)
+    logging.error('No user found with provided username', username)
 
 def set_uninstall_password(policy_id, new_password):
     request_url = f'https://{fqdn}/api/v1/policies/{policy_id}/data'
@@ -1568,10 +1558,10 @@ def add_behavioral_allow_lists(policy_id, process_list, behavior_name_list, comm
     response = requests.post(request_url, headers=headers, json=payload)
 
     if response.status_code == 204:
-        print('Successfully added', len(process_list), 'entries to the', behavior_name_list, 'allow lists for policy', policy_id)
+        logging.info('Successfully added', len(process_list), 'entries to the', behavior_name_list, 'allow lists for policy', policy_id)
         return True
     else:
-        print('ERROR: Unexpected response', response.status_code, 'on POST to', request_url, 'with payload \n', json.dumps(payload, indent=4), '\n and headers \n', json.dumps(headers, indent=4))
+        logging.error('Unexpected response', response.status_code, 'on POST to', request_url, 'with payload \n', json.dumps(payload, indent=4), '\n and headers \n', json.dumps(headers, indent=4))
         return False
 
 def remove_behavioral_allow_lists(policy_id, process_list):
@@ -1582,10 +1572,10 @@ def remove_behavioral_allow_lists(policy_id, process_list):
     headers = {'accept': 'application/json', 'Authorization': key}
     response = requests.delete(request_url, headers=headers, json=payload)
     if response.status_code == 204:
-        print('Successfully removed', len(process_list), 'entries from the Behavioral Allow List for policy', policy_id)
+        logging.info('Successfully removed', len(process_list), 'entries from the Behavioral Allow List for policy', policy_id)
         return True
     else:
-        print('ERROR: Unexpected response', response.status_code, 'on DELETE', request_url, 'with payload \n', json.dumps(payload, indent=4), '\n and headers \n', json.dumps(headers, indent=4))
+        logging.error('Unexpected response', response.status_code, 'on DELETE', request_url, 'with payload \n', json.dumps(payload, indent=4), '\n and headers \n', json.dumps(headers, indent=4))
         return False
 
 def remove_all_behavioral_allow_lists(policy_id):
@@ -1601,10 +1591,10 @@ def add_script_path_allow_list(policy_id, path, comment=''):
     payload = {'items': [ {'comment': comment, 'item': path} ] }
     response = requests.post(request_url, headers=headers, json=payload)
     if response.status_code == 204:
-        print('Successfully added', path, 'to script path allow list for policy', policy_id)
+        logging.info('Successfully added', path, 'to script path allow list for policy', policy_id)
         return True
     else:
-        print('ERROR: Unexpected response', response.status_code, 'on POST to', request_url, 'with payload', payload)
+        logging.error('Unexpected response', response.status_code, 'on POST to', request_url, 'with payload', payload)
         return False
 
 def get_audit_log():
@@ -1626,6 +1616,6 @@ def get_audit_log():
             else:
                 break
         else:
-            print('ERROR: Unexpected response code', response.status_code, 'on GET', request_url, 'with headers', headers)
+            logging.error('Unexpected response code', response.status_code, 'on GET', request_url, 'with headers', headers)
             time.sleep(10)
     return collected_data
