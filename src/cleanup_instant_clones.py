@@ -19,7 +19,6 @@
 
 import argparse
 import logging
-import deepinstinct30 as di
 
 from di_api_wrapper.device_operation import get_devices, remove_device
 
