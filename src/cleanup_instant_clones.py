@@ -22,13 +22,13 @@ import logging
 
 from di_api_wrapper.device_operation import get_devices, remove_device
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from sys import exit
 from helper.logging import setup_logging
 from helper.config import load_config
 
 PROGRAM_NAME = 'CleanUp Instant VDI Clones'
-PROGRAM_VERSION = '0.0.1'
+PROGRAM_VERSION = '0.0.2'
 PROGRAM_DESCRIPTION = 'remove temporary DI clients'
 
 
@@ -53,8 +53,9 @@ def get_offline_vdi_clones(devices, tag, group, offline_hours=12):
                     if device['connectivity_status'] == 'OFFLINE':
                         if device['deployment_status'] == 'REGISTERED':
                             last_contact = datetime.fromisoformat(device['last_contact'].replace('Z',''))
-                            if (now - last_contact) > datetime.timedelta(hours=offline_hours):
+                            if (now - last_contact) > timedelta(hours=offline_hours):
                                 offline_clones.append(device)
+    logging.info('{} offline vdi clones identified'.format(len(offline_clones)))
     return offline_clones
 
 

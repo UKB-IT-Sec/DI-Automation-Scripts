@@ -45,7 +45,7 @@ def get_devices(fqdn, api_key, include_deactivated=True):
                 last_id = response['last_id'] #save returned last_id for reuse on next request
             else: #added this to handle issue where some server versions fail to return last_id on final batch of devices
                 last_id = None
-            logging.info('{} returned 200 with last_id {}'.format(request_url, last_id))
+            logging.debug('{} returned 200 with last_id {}'.format(request_url, last_id))
             if 'devices' in response:
                 devices = response['devices'] #extract devices from response
                 for device in devices: #iterate through the list of devices
@@ -55,6 +55,7 @@ def get_devices(fqdn, api_key, include_deactivated=True):
             logging.error('Unexpected return code {} on request to "{}" with headers "{}"'.format(response.status_code, request_url, headers))
             error_count += 1  #increment error counter
             time.sleep(10) #wait before trying request again
+    logging.info('{} devices found'.format(len(collected_devices)))
     return collected_devices
 
 
