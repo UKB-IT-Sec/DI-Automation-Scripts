@@ -16,32 +16,44 @@
 import logging
 
 
-def setup_logging(args, config):
-    try:
-        log_level = config['Logging']['logLevel']
-    except Exception:
-        logging.error('no log level set in config')
-        log_level = "INFO"
-    log_format = logging.Formatter(fmt='[%(asctime)s][%(module)s][%(levelname)s]: %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-
-    logger = logging.getLogger('')
-    logger.setLevel(logging.DEBUG)
-    
+def _get_log_level(args, config):
     if args.debug:
-        log_level = "DEBUG"
+        return 'DEBUG'
+    else:
+        try:
+            return config['Logging']['logLevel']
+        except Exception:
+            logging.warning('no log level set in config. Setting log level to INFO')
+            return "INFO"
 
-    if not args.silent:
-        console_logger = logging.StreamHandler()
-        console_logger.setLevel(log_level)
-        console_logger.setFormatter(log_format)
-        logger.addHandler(console_logger)
 
+def _setup_console_logger(log_level, log_format):
+    console_logger = logging.StreamHandler()
+    console_logger.setLevel(log_level)
+    console_logger.setFormatter(log_format)
+    return(console_logger)
+
+
+def _setup_file_logger(log_level, log_format, config):
     try:
         log_file = config['Logging']['logFile']
     except Exception:
         logging.error('no log file set in config')
         log_file = 'dias.log'
-    file_log = logging.FileHandler(log_file)
-    file_log.setLevel(log_level)
-    file_log.setFormatter(log_format)
-    logger.addHandler(file_log)
+    file_logger = logging.FileHandler(log_file)
+    file_logger.setLevel(log_level)
+    file_logger.setFormatter(log_format)
+    return file_logger
+    
+     
+def setup_logging(args, config):
+    logger = logging.getLogger('')
+    logger.setLevel(logging.DEBUG)
+    
+    log_level = _get_log_level(args, config)
+    log_format = logging.Formatter(fmt='[%(asctime)s][%(module)s][%(levelname)s]: %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+
+    if not args.silent:
+        logger.addHandler(_setup_console_logger(log_level, log_format))
+
+    logger.addHandler(_setup_file_logger(log_level, log_format, config))
