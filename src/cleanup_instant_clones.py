@@ -68,9 +68,12 @@ if __name__ == '__main__':
     config = load_config(args.config_file, log_level_overwrite=args.log_level)
     setup_logging(args, config)
     
+    di.fqdn = config['Appliance']['fqdn']
+    di.key = config['Appliance']['api_key']
+    
     devices = di.get_devices(include_deactivated=False)
     
-    offline_clones = get_offline_vdi_clones(devices, config.tag, config.group)
+    offline_clones = get_offline_vdi_clones(devices, config['Cleanup_VDI_instant_clones']['tag'], config['Cleanup_VDI_instant_clones']['group'])
     
     remove_devices(offline_clones)
 

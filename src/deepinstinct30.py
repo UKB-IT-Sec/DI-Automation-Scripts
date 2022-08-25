@@ -50,7 +50,7 @@ def export_devices(include_deactivated=False):
     #write data to disk
     devices_df.to_excel(f'{folder_name}/{file_name}', index=False)
     #return confirmation message
-    logging.info(msg)(f'INFO: {str(len(devices))} devices exported to {folder_name}/{file_name}')
+    logging.info(msg)(f'{str(len(devices))} devices exported to {folder_name}/{file_name}')
 
 
 # Accepts a list of (exact hostnames | hostname regex patterns | CIDRs) and
@@ -287,7 +287,7 @@ def get_devices(include_deactivated=True):
             else: #added this to handle issue where some server versions fail to return last_id on final batch of devices
                 last_id = None
             if not quiet_mode:
-                logging.info(request_url, 'returned 200 with last_id', last_id, end='\r')
+                logging.info('{} returned 200 with last_id {}'.format(request_url, last_id))
             if 'devices' in response:
                 devices = response['devices'] #extract devices from response
                 for device in devices: #iterate through the list of devices
@@ -411,7 +411,7 @@ def get_policies(include_policy_data=False, include_allow_deny_lists=False, keep
             policy_id = policy['id']
             request_url = f'https://{fqdn}/api/v1/policies/{policy_id}/data'
             response = requests.get(request_url, headers=headers)
-            logging.info(request_url, 'returned', response.status_code, end='\r')
+            logging.info(request_url, 'returned', response.status_code)
             # Check response code (for some platforms, no policy data available)
             if response.status_code == 200:
                 # Extract policy data from response and append it to policy
@@ -449,7 +449,7 @@ def get_policies(include_policy_data=False, include_allow_deny_lists=False, keep
 
                 request_url = f'https://{fqdn}/api/v1/policies/{policy_id}/{list_type}'
                 response = requests.get(request_url, headers=headers)
-                logging.info(request_url, 'returned', response.status_code, end='\r')
+                logging.info(request_url, 'returned', response.status_code)
                 if response.status_code == 200:
                     response = response.json()
                     policy['allow_deny_and_exclusion_lists'][list_type] = response
@@ -582,7 +582,7 @@ def get_events(search={}, minimum_event_id=0, suspicious=False):
                 minimum_event_id = response.json()['last_id']
 
                 #print result to console
-                logging.info(request_url, 'returned', response.status_code, 'with last_id', minimum_event_id, end='\r')
+                logging.info(request_url, 'returned', response.status_code, 'with last_id', minimum_event_id)
 
                 #if we got a none-null last_id back
                 if minimum_event_id != None:
@@ -600,7 +600,7 @@ def get_events(search={}, minimum_event_id=0, suspicious=False):
             minimum_event_id = response.json()['last_id']
 
             #print result to console
-            logging.info(request_url, 'returned', response.status_code, 'with last_id', minimum_event_id, end='\r')
+            logging.info(request_url, 'returned', response.status_code, 'with last_id', minimum_event_id)
 
             #if we got a none-null last_id back
             if minimum_event_id != None:

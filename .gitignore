@@ -4,6 +4,7 @@
 .DS_Store
 src/diasenv/
 src/dias.log
+ukb.cfg
 
 non_persistent_vdi_cleanup.py
 
