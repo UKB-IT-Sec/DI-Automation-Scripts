@@ -21,6 +21,8 @@ import argparse
 import logging
 import deepinstinct30 as di
 
+from di_api_wrapper.device_operation import get_devices, remove_device
+
 from datetime import datetime
 from sys import exit
 from helper.logging import setup_logging
@@ -57,24 +59,30 @@ def get_offline_vdi_clones(devices, tag, group, offline_hours=12):
     return offline_clones
 
 
-def remove_devices(devices):
+def remove_devices(fqdn, api_key, devices):
     for device in devices:
         logging.info('removing device {}: {}'.format(device['id'], device['hostname']))
-        di.remove_device(device)
+        remove_device(fqdn, api_key, device['id'])
     
 
 if __name__ == '__main__':
     args = _setup_argparser()
     config = load_config(args.config_file, log_level_overwrite=args.log_level)
     setup_logging(args, config)
-    
-    di.fqdn = config['Appliance']['fqdn']
-    di.key = config['Appliance']['api_key']
-    
-    devices = di.get_devices(include_deactivated=False)
+
+    try:
+        fqdn = config['Appliance']['fqdn']
+    except Exception:
+        exit('fqdn missing in config file')
+    try:
+        api_key = config['Appliance']['api_key']
+    except Exception:
+        exit('api key missing in config file')
+
+    devices = get_devices(fqdn, api_key, include_deactivated=False)
     
     offline_clones = get_offline_vdi_clones(devices, config['Cleanup_VDI_instant_clones']['tag'], config['Cleanup_VDI_instant_clones']['group'])
     
-    remove_devices(offline_clones)
+    remove_devices(fqdn, api_key, offline_clones)
 
     exit()
