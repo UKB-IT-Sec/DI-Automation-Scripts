@@ -64,6 +64,6 @@ def remove_device(fqdn, api_key, device_id):
     headers = {'Authorization': api_key}
     response = requests.post(request_url, headers=headers)
     if response.status_code == 204:
-        logging.info('Successfully removed device', device_id)
+        logging.info('Successfully removed device: {}'.format(device_id))
     else:
-        logging.error('Failed to remove device', device_id)
+        logging.error('Failed to remove device: {}'.format(device_id))
